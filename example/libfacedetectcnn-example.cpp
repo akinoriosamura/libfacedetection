@@ -39,6 +39,8 @@ the use of this software, even if advised of the possibility of such damage.
 #include <stdio.h>
 #include <opencv2/opencv.hpp>
 #include "facedetectcnn.h"
+#include <iostream>
+#include <chrono>
 
 //define the buffer size. Do not change the size!
 #define DETECT_BUFFER_SIZE 0x20000
@@ -46,6 +48,7 @@ using namespace cv;
 
 int main(int argc, char* argv[])
 {
+	/*
     if(argc != 2)
     {
         printf("Usage: %s <image_file_name>\n", argv[0]);
@@ -59,6 +62,7 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "Can not load the image file %s.\n", argv[1]);
 		return -1;
 	}
+	*/
 
 	int * pResults = NULL; 
     //pBuffer is used in the detection functions.
@@ -70,37 +74,53 @@ int main(int argc, char* argv[])
         return -1;
     }
 	
+	// video capture
+    VideoCapture video(0);
+    if(!video.isOpened()) return 1;
 
-	///////////////////////////////////////////
-	// CNN face detection 
-	// Best detection rate
-	//////////////////////////////////////////
-	//!!! The input image must be a BGR one (three-channel) instead of RGB
-	//!!! DO NOT RELEASE pResults !!!
-	pResults = facedetect_cnn(pBuffer, (unsigned char*)(image.ptr(0)), image.cols, image.rows, (int)image.step);
+    Mat image;
 
-    printf("%d faces detected.\n", (pResults ? *pResults : 0));
-	Mat result_cnn = image.clone();
-	//print the detection results
-	for(int i = 0; i < (pResults ? *pResults : 0); i++)
-	{
-        short * p = ((short*)(pResults+1))+142*i;
-		int x = p[0];
-		int y = p[1];
-		int w = p[2];
-		int h = p[3];
-		int confidence = p[4];
-		int angle = p[5];
+    video >> image;
 
-		printf("face_rect=[%d, %d, %d, %d], confidence=%d, angle=%d\n", x,y,w,h,confidence, angle);
-		rectangle(result_cnn, Rect(x, y, w, h), Scalar(0, 255, 0), 2);
+    for(;;) {
+        video >> image;
+
+		///////////////////////////////////////////
+		// CNN face detection 
+		// Best detection rate
+		//////////////////////////////////////////
+		//!!! The input image must be a BGR one (three-channel) instead of RGB
+		//!!! DO NOT RELEASE pResults !!!
+		std::chrono::system_clock::time_point  start, end; // 型は auto で可
+		start = std::chrono::system_clock::now(); // 計測開始時間
+		pResults = facedetect_cnn(pBuffer, (unsigned char*)(image.ptr(0)), image.cols, image.rows, (int)image.step);
+
+		end = std::chrono::system_clock::now();  // 計測終了時間
+		double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count(); //処理に要した時間をミリ秒に変換
+
+		std::cout << "elapsed: " << elapsed << "msec.\n";
+		printf("%d faces detected.\n", (pResults ? *pResults : 0));
+		Mat result_cnn = image.clone();
+		//print the detection results
+		for(int i = 0; i < (pResults ? *pResults : 0); i++)
+		{
+			short * p = ((short*)(pResults+1))+142*i;
+			int x = p[0];
+			int y = p[1];
+			int w = p[2];
+			int h = p[3];
+			int confidence = p[4];
+			int angle = p[5];
+
+			printf("face_rect=[%d, %d, %d, %d], confidence=%d, angle=%d\n", x,y,w,h,confidence, angle);
+			rectangle(result_cnn, Rect(x, y, w, h), Scalar(0, 255, 0), 2);
+		}
+		imshow("result_cnn", result_cnn);
+		int k = waitKey(1);
+        if(k == 27) {
+            break;
+        }
 	}
-	imshow("result_cnn", result_cnn);
-
-	waitKey();
-
-    //release the buffer
-    free(pBuffer);
 
 	return 0;
 }
